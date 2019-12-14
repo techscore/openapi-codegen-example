@@ -1,0 +1,455 @@
+openapi: "3.0.2"
+info:
+  description: "Synergy! mail delivery api."
+  version: "1.0.1"
+  title: "Synergy! mail delivery api."
+  termsOfService: ""
+  contact:
+    email: "api-support@i.msgs.jp"
+  license:
+    name: "Synergy"
+    url: "https://form.synergy-marketing.co.jp/fcnts/euz/mailapi_agreement.html"
+servers:
+- url: "https://mail.paas.crmstyle.com/e"
+paths:
+  /tymail/v1/{user}/mail/deliveries/{taskId}:
+    get:
+      summary: "Get a delivery task status"
+      operationId: "getDeliveryStatus"
+      parameters:
+      - $ref: "#/components/parameters/user"
+      - $ref: "#/components/parameters/taskId"
+      responses:
+        200:
+          description: "delivery status"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryStatus"
+        404:
+          description: "no delivery task found"
+        500:
+          description: "internal server error"
+      security:
+      - mail_oauth:
+        - "mail:send"
+  /tymail/v1/{user}/mail/deliveries:
+    post:
+      summary: "start mail delivery"
+      operationId: "startMailDelivery"
+      parameters:
+      - $ref: "#/components/parameters/user"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryRequest"
+      responses:
+        200:
+          description: "delivery status"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryResponse"
+        400:
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: "internal server error"
+      security:
+      - mail_oauth:
+        - "mail:send"
+  /tymail/v1/{user}/mail/deliveries/{taskId}/send:
+    post:
+      summary: "start prepared mail delivery"
+      operationId: "startPreparedMailDelivery"
+      parameters:
+      - $ref: "#/components/parameters/user"
+      - $ref: "#/components/parameters/taskId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreparedDeliveryRequest"
+      responses:
+        200:
+          description: "delivery status"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryResponse"
+        400:
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: "internal server error"
+      security:
+      - mail_oauth:
+        - "mail:send"
+  /tymail/v1/{user}/mail/deliveries/new:
+    post:
+      summary: "create mail delivery setting"
+      operationId: "createMailDeliverySetting"
+      parameters:
+      - $ref: "#/components/parameters/user"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliverySettingRequest"
+      responses:
+        200:
+          description: "delivery status"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryResponse"
+        400:
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: "internal server error"
+      security:
+      - mail_oauth:
+        - "mail:send"
+  /tymail/v1/{user}/mail/deliveries/{taskId}/opens:
+    get:
+      summary: "Get the mail open results"
+      operationId: "getDeliveryMailOpenResults"
+      parameters:
+      - $ref: "#/components/parameters/user"
+      - $ref: "#/components/parameters/taskId"
+      - $ref: "#/components/parameters/reportTermStart"
+      - $ref: "#/components/parameters/reportTermEnd"
+      responses:
+        200:
+          description: "mail open results"
+          headers:
+            Content-MD5:
+              schema:
+                type: "string"
+                format: "byte"
+          content:
+            application/octet-stream:
+              schema:
+                type: "string"
+                format: "binary"
+        404:
+          description: "no delivery task found"
+        500:
+          description: "internal server error"
+      security:
+      - mail_oauth:
+        - "mail:result"
+  /tymail/v1/{user}/mail/deliveries/{taskId}/clicks:
+    get:
+      summary: "Get the mail click results"
+      operationId: "getDeliveryMailClickResults"
+      parameters:
+      - $ref: "#/components/parameters/user"
+      - $ref: "#/components/parameters/taskId"
+      - $ref: "#/components/parameters/reportTermStart"
+      - $ref: "#/components/parameters/reportTermEnd"
+      responses:
+        200:
+          description: "mail open results"
+          headers:
+            Content-MD5:
+              schema:
+                type: "string"
+                format: "byte"
+          content:
+            application/octet-stream:
+              schema:
+                type: "string"
+                format: "binary"
+        404:
+          description: "no delivery task found"
+        500:
+          description: "internal server error"
+      security:
+      - mail_oauth:
+        - "mail:result"
+  /tymail/v1/{user}/mail/deliveries/{taskId}/errors:
+    get:
+      summary: "Get the mail error results"
+      operationId: "getDeliveryMailErrorResults"
+      parameters:
+      - $ref: "#/components/parameters/user"
+      - $ref: "#/components/parameters/taskId"
+      - $ref: "#/components/parameters/reportTermStart"
+      - $ref: "#/components/parameters/reportTermEnd"
+      responses:
+        200:
+          description: "mail open results"
+          headers:
+            Content-MD5:
+              schema:
+                type: "string"
+                format: "byte"
+          content:
+            application/octet-stream:
+              schema:
+                type: "string"
+                format: "binary"
+        404:
+          description: "no delivery task found"
+        500:
+          description: "internal server error"
+      security:
+      - mail_oauth:
+        - "mail:result"
+components:
+  parameters:
+    user:
+      in: "path"
+      name: "user"
+      required: true
+      description: "user name"
+      schema:
+        type: "string"
+        minLength: 3
+    taskId:
+      in: "path"
+      name: "taskId"
+      required: true
+      description: "delivery task id"
+      schema:
+        type: "integer"
+        format: "int64"
+    reportTermStart:
+      in: "query"
+      name: "start"
+      required: false
+      description: "report term start"
+      schema:
+        type: "string"
+        format: "date-time"
+    reportTermEnd:
+      in: "query"
+      name: "end"
+      required: false
+      description: "report term end"
+      schema:
+        type: "string"
+        format: "date-time"
+  schemas:
+    DeliveryRequest:
+      type: "object"
+      properties:
+        requestId:
+          type: "string"
+          minLength: 1
+        test:
+          type: "boolean"
+          default: false
+        encode:
+          type: "string"
+          enum:
+            - "UTF-8"
+            - "ISO-2022-JP"
+          default:
+            "UTF-8"
+        trackingDomain:
+          type: "string"
+          description: "If you want to use this parameter, please contact support."
+        trackingDomainSslReady:
+          type: "boolean"
+        envelopeFrom:
+          type: "string"
+          format: "email"
+          description: "If you want to use this parameter, please contact support."
+        fromName:
+          type: "string"
+          minLength: 1
+          maxLength: 120
+        fromAddress:
+          type: "string"
+          nullable: false
+          minLength: 1
+          maxLength: 256
+        replyAddress:
+          type: "string"
+          minLength: 1
+          maxLength: 256
+        subject:
+          type: "string"
+          nullable: false
+          minLength: 1
+          maxLength: 120
+        preheader:
+          type: "string"
+        bodyText:
+          type: "string"
+          minLength: 1
+        bodyHtml:
+          type: "string"
+          minLength: 1
+        deliveryMailAddressPropertyName:
+          type: "string"
+          nullable: false
+          minLength: 1
+        count:
+          type: "integer"
+          nullable: false
+        deliveryData:
+          type: "array"
+          nullable: false
+          items:
+            type: object
+            additionalProperties:
+              type: "string"
+    PreparedDeliveryRequest:
+      type: "object"
+      properties:
+        requestId:
+          type: "string"
+          minLength: 1
+        test:
+          type: "boolean"
+          default: false
+        trackingDomain:
+          type: "string"
+          description: "If you want to use this parameter, please contact support."
+        trackingDomainSslReady:
+          type: "boolean"
+        envelopeFrom:
+          type: "string"
+          format: "email"
+          description: "If you want to use this parameter, please contact support."
+        count:
+          type: "integer"
+          nullable: false
+        deliveryData:
+          type: "array"
+          nullable: false
+          items:
+            type: object
+            additionalProperties:
+              type: "string"
+    DeliverySettingRequest:
+      type: "object"
+      properties:
+        encode:
+          type: "string"
+          enum:
+            - "UTF-8"
+            - "ISO-2022-JP"
+          default:
+            "UTF-8"
+        trackingDomain:
+          type: "string"
+          description: "If you want to use this parameter, please contact support."
+        trackingDomainSslReady:
+          type: "boolean"
+        envelopeFrom:
+          type: "string"
+          format: "email"
+          description: "If you want to use this parameter, please contact support."
+        fromName:
+          type: "string"
+          minLength: 1
+          maxLength: 120
+        fromAddress:
+          type: "string"
+          nullable: false
+          minLength: 1
+          maxLength: 256
+        replyAddress:
+          type: "string"
+          minLength: 1
+          maxLength: 256
+        subject:
+          type: "string"
+          nullable: false
+          minLength: 1
+          maxLength: 120
+        preheader:
+          type: "string"
+        bodyText:
+          type: "string"
+          minLength: 1
+        bodyHtml:
+          type: "string"
+          minLength: 1
+        deliveryMailAddressPropertyName:
+          type: "string"
+          nullable: false
+          minLength: 1
+    DeliveryResponse:
+      type: "object"
+      properties:
+        deliveryTaskId:
+          type: "integer"
+          format: "int64"
+        textClickFeedbacks:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/ClickFeedback"
+        htmlClickFeedbacks:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/ClickFeedback"
+    ClickFeedback:
+      type: "object"
+      properties:
+        id:
+          type: "integer"
+          format: "int64"
+        url:
+          type: "string"
+    DeliveryStatus:
+      type: "object"
+      properties:
+        deliveryTaskId:
+          type: "integer"
+          format: "int64"
+        total:
+          type: "integer"
+          format: "int64"
+        sent:
+          type: "integer"
+          format: "int64"
+        status:
+          type: "string"
+          description: "delivery status"
+          enum:
+          - "SENDING"
+          - "COMPLETED"
+          - "ERROR"
+    ErrorResponse:
+      type: "object"
+      properties:
+        errors:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Error"
+    Error:
+      type: "object"
+      properties:
+        code:
+          type: "integer"
+        property:
+          type: "string"
+        message:
+          type: "string"
+  securitySchemes:
+    mail_oauth:
+      type: oauth2
+      description: mail auth
+      flows:
+        clientCredentials:
+          tokenUrl: "https://auth.paas.crmstyle.com/oauth2/token"
+          scopes:
+            mail:send: "delivery"
+            mail:result: "get the delivery results"
+          x-audience: "https://mail.paas.crmstyle.com"

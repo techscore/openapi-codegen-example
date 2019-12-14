@@ -1,0 +1,183 @@
+package {{invokerPackage}};
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.*;
+import org.springframework.security.oauth2.client.ClientCredentialsReactiveOAuth2AuthorizedClientProvider;
+import org.springframework.security.oauth2.client.endpoint.OAuth2ClientCredentialsGrantRequest;
+import org.springframework.security.oauth2.client.endpoint.WebClientReactiveClientCredentialsTokenResponseClient;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultReactiveOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.web.reactive.function.client.ServerOAuth2AuthorizedClientExchangeFilterFunction;
+import org.springframework.security.oauth2.client.web.server.UnAuthenticatedServerOAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AccessTokenResponse;
+import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
+import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.*;
+import reactor.core.publisher.Mono;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
+
+import static org.springframework.security.oauth2.core.web.reactive.function.OAuth2BodyExtractors.oauth2AccessTokenResponse;
+
+@Configuration
+{{>generatedAnnotation}}
+public class WebClientConfig {
+
+    @Autowired
+    private PaasWebClientReactiveClientCredentialsTokenResponseClient paasWebClientReactiveClientCredentialsTokenResponseClient;
+
+    @Bean
+    public WebClient webClient(final ReactiveClientRegistrationRepository clientRegistrationRepository) {
+        final ClientCredentialsReactiveOAuth2AuthorizedClientProvider provider =
+                new ClientCredentialsReactiveOAuth2AuthorizedClientProvider();
+
+        provider.setAccessTokenResponseClient(paasWebClientReactiveClientCredentialsTokenResponseClient);
+
+        final DefaultReactiveOAuth2AuthorizedClientManager manager =
+                new DefaultReactiveOAuth2AuthorizedClientManager(clientRegistrationRepository,
+                        new UnAuthenticatedServerOAuth2AuthorizedClientRepository());
+        manager.setAuthorizedClientProvider(provider);
+
+        final ServerOAuth2AuthorizedClientExchangeFilterFunction oauth2 =
+                new ServerOAuth2AuthorizedClientExchangeFilterFunction(manager);
+        oauth2.setDefaultClientRegistrationId("paas");
+
+        return WebClient.builder()
+                .filter(oauth2)
+                .build();
+    }
+}
+
+@Component
+class PaasWebClientReactiveClientCredentialsTokenResponseClient extends WebClientReactiveClientCredentialsTokenResponseClient {
+
+    @Value("${spring.security.oauth2.client.registration.paas.audience}")
+    private String audience;
+
+    private WebClient webClient = WebClient.builder().build();
+
+    @Override
+    public Mono<OAuth2AccessTokenResponse> getTokenResponse(OAuth2ClientCredentialsGrantRequest authorizationGrantRequest) {
+        return Mono.defer(() -> {
+            ClientRegistration clientRegistration = authorizationGrantRequest.getClientRegistration();
+
+            String tokenUri = clientRegistration.getProviderDetails().getTokenUri();
+            BodyInserters.FormInserter<String> body = body(authorizationGrantRequest);
+
+            OAuth2AccessTokenResponse res = OAuth2AccessTokenResponseCache.getCacheResponse(audience);
+            if (res != null) {
+                return Mono.just(res);
+            }
+            return this.webClient.post()
+                    .uri(tokenUri)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .headers(headers(clientRegistration))
+                    .body(body)
+                    .exchange()
+                    .flatMap(response -> {
+                        HttpStatus status = HttpStatus.resolve(response.rawStatusCode());
+                        if (status == null || !status.is2xxSuccessful()) {
+                            // extract the contents of this into a method named oauth2AccessTokenResponse but has an argument for the response
+                            return response.bodyToFlux(DataBuffer.class)
+                                    .map(DataBufferUtils::release)
+                                    .then(Mono.error(WebClientResponseException.create(response.rawStatusCode(),
+                                            "Cannot get token, expected 2xx HTTP Status code",
+                                            null,
+                                            null,
+                                            null
+                                    )));
+                        }
+                        return response.body(oauth2AccessTokenResponse()); })
+                    .map(response -> {
+                        if (response.getAccessToken().getScopes().isEmpty()) {
+                            response = OAuth2AccessTokenResponse.withResponse(response)
+                                    .scopes(authorizationGrantRequest.getClientRegistration().getScopes())
+                                    .build();
+                        }
+                        // add cache
+                        OAuth2AccessTokenResponseCache.addResponse(audience, response);
+                        return response;
+                    });
+        });
+    }
+
+    private Consumer<HttpHeaders> headers(ClientRegistration clientRegistration) {
+        return headers -> {
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            if (ClientAuthenticationMethod.BASIC.equals(clientRegistration.getClientAuthenticationMethod())) {
+                headers.setBasicAuth(clientRegistration.getClientId(), clientRegistration.getClientSecret());
+            }
+        };
+    }
+
+    private BodyInserters.FormInserter<String> body(OAuth2ClientCredentialsGrantRequest authorizationGrantRequest) {
+        ClientRegistration clientRegistration = authorizationGrantRequest.getClientRegistration();
+        BodyInserters.FormInserter<String> body = BodyInserters
+                .fromFormData(OAuth2ParameterNames.GRANT_TYPE, authorizationGrantRequest.getGrantType().getValue());
+        Set<String> scopes = clientRegistration.getScopes();
+        if (!CollectionUtils.isEmpty(scopes)) {
+            String scope = StringUtils.collectionToDelimitedString(scopes, " ");
+            body.with(OAuth2ParameterNames.SCOPE, scope);
+        }
+        if (!StringUtils.isEmpty(audience)) {
+            body.with("audience", audience);
+        }
+        if (ClientAuthenticationMethod.POST.equals(clientRegistration.getClientAuthenticationMethod())) {
+            body.with(OAuth2ParameterNames.CLIENT_ID, clientRegistration.getClientId());
+            body.with(OAuth2ParameterNames.CLIENT_SECRET, clientRegistration.getClientSecret());
+        }
+        return body;
+    }
+}
+
+class OAuth2AccessTokenResponseCache {
+
+    private static class Cache {
+        private LocalDateTime expiredAt = null;
+        private OAuth2AccessTokenResponse response = null;
+
+        private Cache(OAuth2AccessTokenResponse response) {
+            this.expiredAt = LocalDateTime.ofInstant(response.getAccessToken().getExpiresAt(), ZoneId.systemDefault());
+            this.response = response;
+        }
+    }
+
+    private static final Map<String, Cache> tokenCacheMap
+            = new ConcurrentHashMap<String, Cache>();
+
+    public static void addResponse(String audience, OAuth2AccessTokenResponse response) {
+        cleanUpTokenIfExpired(audience);
+        tokenCacheMap.putIfAbsent(audience, new Cache(response));
+    }
+
+    public static OAuth2AccessTokenResponse getCacheResponse(String audience) {
+        cleanUpTokenIfExpired(audience);
+        Cache cache = tokenCacheMap.get(audience);
+        return cache == null ? null : cache.response;
+    }
+
+    private static boolean isNearlyExpired(Cache cache) {
+        return cache.expiredAt.isBefore(LocalDateTime.now().plusMinutes(1L));
+    }
+
+    private static void cleanUpTokenIfExpired(String audience) {
+        Cache cache = tokenCacheMap.get(audience);
+        if(cache != null && isNearlyExpired(cache)) {
+            tokenCacheMap.remove(audience);
+        }
+    }
+}

@@ -1,0 +1,20 @@
+{{#authMethods}}{{#isOAuth}}
+spring:
+  security.oauth2.client:
+    provider:
+      paas:
+        token-uri: {{tokenUrl}}
+    registration:
+      paas:
+        authorization-grant-type: client_credentials
+        client-id: your-client-id
+        client-secret: your-client-secret
+        scope:
+        {{#scopes}}
+          - "{{scope}}"
+        {{/scopes}}
+        {{#vendorExtensions}}
+        audience: {{x-audience}}{{/vendorExtensions}}{{/isOAuth}}{{/authMethods}}
+logging:
+  level:
+    reactor.netty: DEBUG
